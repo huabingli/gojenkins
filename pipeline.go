@@ -20,6 +20,7 @@ package gojenkins
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 )
 
@@ -45,7 +46,7 @@ type PipelineRun struct {
 	Duration            int64 `json:"durationMillis"`
 	QueueDurationMillis int64 `json:"queueDurationMillis"`
 	PauseDurationMillis int64 `json:"pauseDurationMillis"`
-	Stages              []PipelineNode
+	Stages              []*PipelineNode
 }
 
 type PipelineNode struct {
@@ -57,10 +58,10 @@ type PipelineNode struct {
 	ParameterDescription string `json:"parameterDescription"` // StageFlowNodes 中会出现。
 	ExecNode             string `json:"execNode"`
 	Status               string
-	StartTime            int64          `json:"startTimeMillis"`
-	Duration             int64          `json:"durationMillis"`
-	PauseDurationMillis  int64          `json:"pauseDurationMillis"`
-	StageFlowNodes       []PipelineNode `json:"stageFlowNodes"`
+	StartTime            int64           `json:"startTimeMillis"`
+	Duration             int64           `json:"durationMillis"`
+	PauseDurationMillis  int64           `json:"pauseDurationMillis"`
+	StageFlowNodes       []*PipelineNode `json:"stageFlowNodes"`
 	ParentNodes          []int64
 }
 
@@ -90,17 +91,25 @@ type PipelineNodeLog struct {
 
 // utility function to fill in the Base fields under PipelineRun
 func (run *PipelineRun) update() {
-	href := run.URLs["self"]["href"]
-	if matches := baseURLRegex.FindStringSubmatch(href); len(matches) > 1 {
-		run.Base = matches[1]
-	}
-	for i := range run.Stages {
-		run.Stages[i].Run = run
-		href := run.Stages[i].URLs["self"]["href"]
-		if matches := baseURLRegex.FindStringSubmatch(href); len(matches) > 1 {
-			run.Stages[i].Base = matches[1]
+	run.Base = run.extractBaseURL(run.URLs)
+	for _, stage := range run.Stages {
+		stage.Run = run
+		stage.Base = run.extractBaseURL(stage.URLs)
+		for _, flowNode := range stage.StageFlowNodes {
+			flowNode.Run = run
+			flowNode.Base = run.extractBaseURL(flowNode.URLs)
 		}
 	}
+}
+
+// Helper function to extract base URL
+func (run *PipelineRun) extractBaseURL(urls map[string]map[string]string) string {
+	if href, ok := urls["self"]["href"]; ok {
+		if matches := baseURLRegex.FindStringSubmatch(href); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+	return ""
 }
 
 func (job *Job) GetPipelineRuns(ctx context.Context) (pr []PipelineRun, err error) {
@@ -192,6 +201,7 @@ func (node *PipelineNode) GetLog(ctx context.Context) (log *PipelineNodeLog, err
 	log = new(PipelineNodeLog)
 	href := node.Base + "/wfapi/log"
 	fmt.Println(href)
+	slog.DebugContext(ctx, "GetLog", "href", href)
 	_, err = node.Run.Job.Jenkins.Requester.GetJSON(ctx, href, log, nil)
 	if err != nil {
 		return nil, err
