@@ -198,6 +198,9 @@ func (pr *PipelineRun) GetNode(ctx context.Context, id string) (node *PipelineNo
 }
 
 func (node *PipelineNode) GetLog(ctx context.Context) (log *PipelineNodeLog, err error) {
+	if node.Base == "" {
+		return nil, fmt.Errorf("node.Base is empty")
+	}
 	log = new(PipelineNodeLog)
 	href := node.Base + "/wfapi/log"
 	fmt.Println(href)
