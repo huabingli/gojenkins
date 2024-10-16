@@ -203,7 +203,6 @@ func (node *PipelineNode) GetLog(ctx context.Context) (log *PipelineNodeLog, err
 	}
 	log = new(PipelineNodeLog)
 	href := node.Base + "/wfapi/log"
-	fmt.Println(href)
 	slog.DebugContext(ctx, "GetLog", "href", href)
 	_, err = node.Run.Job.Jenkins.Requester.GetJSON(ctx, href, log, nil)
 	if err != nil {
